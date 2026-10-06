@@ -348,7 +348,7 @@ table.resultados { border-collapse: collapse; width: 100%; min-width: 760px; fon
 <script>
 globalThis.OM_APP = (function () {
 // ═══════════════════════════════════════════════════════════════════════════
-//  MOTOR DE OJO MARINERO (versión 1.1, revisión 16 · 6-oct-2026)
+//  MOTOR DE OJO MARINERO (versión 1.1, revisión 17 · 6-oct-2026)
 //  Extraído de ojomarinero.jsx: todo lo que va antes de "function Compass".
 //  JavaScript puro, sin React. La fuente es la app: aquí no se edita.
 //  Para el simulador: sustituye motor/motor-ojomarinero.js por este archivo.
@@ -357,7 +357,7 @@ globalThis.OM_APP = (function () {
 
 // Versión del motor (rumbos, bordos, roles, línea de salida). Va en el cuaderno de
 // regata para saber con qué motor aconsejó la app; el simulador la lee al importar.
-const MOTOR_VERSION = "1.1 · 2026-10-06 · rev16";
+const MOTOR_VERSION = "1.1 · 2026-10-06 · rev17";
 
 // ─── POLAR DATA ───────────────────────────────────────────────────────────────
 const POLARS = {
@@ -2519,6 +2519,18 @@ function computeRaceStrategy(allResults, wpBearing, twdFrom, distanceNm, tws, po
   // mejoraba (−0,04 a −0,13 %) y perdía en ceñidas cortas por la virada de más. Ahora se
   // prueban las dos y la de los roles solo se queda si no cuesta más (la virada extra al
   // empezar o al llegar a la boya está en netTime); si empatan, la favorecida.
+  // rev17: AHORA SIEMPRE LA DEL PLAN. Las dos solo se diferencian en la virada de más al
+  // empezar o en la boya, así que casi siempre empataban y ganaba la de los roles: con la
+  // rev16 aún no coincidían en el 45 % de las ceñidas con roles de 1 nm y en el 27 % de
+  // las de 2,3 nm, y en esos casos seguir «Salir en» costaba 349–376 s por juego de
+  // regatas simuladas. La buena era la del plan.
+  // Pero SI SE JUEGAN LOS ROLES se sigue decidiendo con las dos amuras, como en la rev16.
+  // Saliendo en estribor con la boya a barlovento y dejándola por babor, sobre el papel
+  // estribor–babor–estribor (2 viradas) juega los roles gratis, y por la amura del plan
+  // hacen falta 4 tramos: en ceñidas cortas la app dejaba de jugarlos y en las regatas
+  // simuladas perdía 1127 s (J/80: de +42 a +229 s). Ahora se decide igual que antes y se
+  // juegan saliendo por la amura del plan; en algún caso (≈3 %) el tiempo estimado sale
+  // hasta unos 10 s peor que el de dos bordos, el coste de esa virada sobre el papel.
   const tackLibre = base.legs[0].tack, tackPlan = baseRodeo.legs[0].tack;
   // Con 2 tramos se navega el plan que respeta el lado de la boya
   const ultimaAmura = (n, t1 = tackLibre) => n === 2 ? baseRodeo.legs[baseRodeo.legs.length - 1].tack : (n % 2 === 1 ? t1 : -t1);
@@ -2550,16 +2562,23 @@ function computeRaceStrategy(allResults, wpBearing, twdFrom, distanceNm, tws, po
   const valido = n => (n === 2) || (amplitude > 0 && oscType !== "persistent" && (n % 2 === 1 || !!req));
   let bestN = 2, bestData = netTime(2), bestNet = bestData.net, t1Elegida = tackLibre;
   const maxN = Math.min(tacksAvailable, 11);
-  for (const t1 of (tackPlan !== tackLibre ? [tackLibre, tackPlan] : [tackLibre])) {
+  // 1) ¿Compensa jugar los roles? Con cualquiera de las dos amuras de salida (como en la rev16).
+  let jugar = false;
+  for (const t1 of (tackPlan !== tackLibre ? [tackLibre, tackPlan] : [tackLibre]))
+    for (let n = 3; n <= maxN && !jugar; n++) if (valido(n) && netTime(n, t1).net < bestNet - 1e-9) jugar = true;
+  // 2) Si compensa, el mejor nº de tramos saliendo por la amura del plan
+  if (jugar) {
+    bestNet = Infinity;
     for (let n = 3; n <= maxN; n++) {
       if (!valido(n)) continue;
-      const r = netTime(n, t1);
-      if (r.net < bestNet - 1e-9) { bestNet = r.net; bestN = n; bestData = r; t1Elegida = t1; }
+      const r = netTime(n, tackPlan);
+      if (r.net < bestNet - 1e-9) { bestNet = r.net; bestN = n; bestData = r; t1Elegida = tackPlan; }
     }
   }
   let numTacks = bestN;
-  // Con 2 tramos, o si con roles conviene salir por la amura del plan, se usa el orden del plan
-  if (numTacks === 2 || t1Elegida !== tackLibre) base = baseRodeo;
+  // Siempre el orden y los rumbos del plan de dos bordos: «Salir en», el plan y la carta
+  // arrancan por la misma amura y con el mismo rumbo.
+  base = baseRodeo;
   // ── VMG NETO de 2 bordadas (incluye su propio coste de 2 viradas) ──
   // Comparamos neto contra neto para que la ganancia mostrada sea REAL y coherente con las barras.
   // (sin ninguna ganancia de roles: con rol persistente netTime(2) ya la incluye)
@@ -2725,6 +2744,7 @@ function computeRaceStrategy(allResults, wpBearing, twdFrom, distanceNm, tws, po
            tackCostSec, esPopa,
            tacksAvailable };
 }
+
 
 
 
