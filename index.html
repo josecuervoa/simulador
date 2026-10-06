@@ -3184,7 +3184,12 @@ function iniciarTramo(b, t, viento, sim, recorrido, twdIn, twsIn) {
     let popa = E.popa;
     if (popa === 'polar') { const rp = APP.findOptimalHeading(b.P, w.vel, w.dir, norm(w.dir + 180), 0, 0, b.ref, 0); popa = Math.round(Math.abs(dif(rp[0].boatHeading, w.dir))); }
     b.twaObj = { 1: leg.tipo === 'ceñida' ? b.twaCeñida : popa, [-1]: leg.tipo === 'ceñida' ? b.twaCeñida : popa };
-    b.mediaViento = w.dir;
+    // Su idea del viento medio: la media de los 5 minutos antes de la salida (la misma que
+    // mide quien lleva la app), y después la va ajustando cada segundo, también en las boyas.
+    // Antes empezaba con el viento del momento del cañonazo y se ponía al viento del momento
+    // en cada boya: si el cañonazo caía en un role, tomaban ese role por el viento medio y
+    // jugaban los roles al revés que la app (y todos a la vez, porque todos lo hacían igual).
+    if (b.mediaViento == null) b.mediaViento = b.twdIn;
     b.errorOjo = gauss(azar(b.semilla + 7919 * (b.tramo + 1))) * (E.errorOjo != null ? E.errorOjo : c.errorOjo != null ? c.errorOjo : 3);            // cómo calcula la layline a ojo
     // Banda: −1 izquierda (estribor), +1 derecha (babor). Fija; 'primero' = la amura
     // buena con el viento de ese momento, hasta la layline (corner banger); 'presion' =
@@ -4409,12 +4414,22 @@ window.OM_DATOS = {"REGATAS":[{"id":"r1","titulo":"Día de manual","resumen":"12
   const CLASES = ['I', 'II', 'III'];
   const selClase = (v, id) => `<select id="${id}" data-c="clase"><option value="" ${!v ? 'selected' : ''}>—</option>${CLASES.map(k => `<option value="${k}" ${v === k ? 'selected' : ''}>${k}</option>`).join('')}</select>`;
   // Color y clase no cambian la simulación: se aplican a lo ya simulado sin volver a simular
+  // Cada barco simulado guarda en S.flotaSim su barco de la flota (origen), no su nombre: con
+  // nombres repetidos o renombrados se aplicaba a otro. Se cambia también S.flotaSim, que es de
+  // donde se rehace la vista (al cambiar el tema claro/oscuro se perdía).
   function aplicarAVista() {
     if (!S.sim || S.simulando) return;
-    for (const b of S.barcos) {
-      if (b.real || b.fantasma) { b.clase = S.impOpc.clase || ''; b.orc = S.impOpc.orc; b.irc = S.impOpc.irc; continue; }
-      const src = S.flota.find(f => f.nombre === b.nombre); if (src) { b.color = src.color; b.clase = src.clase || ''; b.orc = src.orc; b.irc = src.irc; }
-    }
+    S.flotaSim.forEach(fs => {
+      if (fs.fantasma) { fs.orc = S.impOpc.orc; fs.irc = S.impOpc.irc; return; }
+      const o = fs.origen; if (!o) return;
+      fs.color = o.color; fs.clase = o.clase || ''; fs.orc = o.orc; fs.irc = o.irc;
+    });
+    S.barcos.forEach((b, i) => {
+      if (b.real) { b.clase = S.impOpc.clase || ''; b.orc = S.impOpc.orc; b.irc = S.impOpc.irc; return; }
+      const fs = S.flotaSim[i]; if (!fs) return;
+      if (fs.fantasma) { b.clase = S.impOpc.clase || ''; b.orc = fs.orc; b.irc = fs.irc; return; }
+      b.color = fs.color; b.clase = fs.clase || ''; b.orc = fs.orc; b.irc = fs.irc;
+    });
     dibujar(); resultados(); decisiones(); consejos();
   }
   function pintarFlota() {
@@ -4689,7 +4704,7 @@ window.OM_DATOS = {"REGATAS":[{"id":"r1","titulo":"Día de manual","resumen":"12
   // ═══ SIMULAR ═══════════════════════════════════════════════════════════════
   function montar() {
     const c = aSimulador(S.cond);
-    const flota = S.flota.map(f => ({ nombre: f.nombre, modelo: f.modelo, estilo: f.estilo, color: f.color, orc: f.orc, irc: f.irc, clase: f.clase || '',
+    const flota = S.flota.map(f => ({ nombre: f.nombre, modelo: f.modelo, estilo: f.estilo, color: f.color, orc: f.orc, irc: f.irc, clase: f.clase || '', origen: f,
       ...(f.estilo === 'app' ? {} : { E: { ...limpiarEstilo(estilo(f.estilo)) } }), ...(f.tripulantes ? { tripulantes: f.tripulantes } : {}) }));
     let duracion = D.DURACION;
     if (S.imp) {
@@ -4740,7 +4755,8 @@ window.OM_DATOS = {"REGATAS":[{"id":"r1","titulo":"Día de manual","resumen":"12
   function recorridoLargo(rec) { let L = 0, p = { x: 0, y: 0 }; for (const l of rec) { L += Math.hypot(l.m.x - p.x, l.m.y - p.y); p = l.m; } return L; }
 
   function construirVista(s, final) {
-    const barcos = s.barcos.map((b, i) => ({ id: b.id, nombre: b.nombre, color: b.color, usaApp: b.usaApp, estilo: b.usaApp ? 'Sigue la app' : (b.E ? b.E.nombre : b.estilo),
+    // El fantasma, del color de la tinta del tema de ahora (antes, el del tema al simular)
+    const barcos = s.barcos.map((b, i) => ({ id: b.id, nombre: b.nombre, color: S.flotaSim[i] && S.flotaSim[i].fantasma ? (css('--tinta') || '#0d1b26') : (S.flotaSim[i] && S.flotaSim[i].color) || b.color, usaApp: b.usaApp, estilo: b.usaApp ? 'Sigue la app' : (b.E ? b.E.nombre : b.estilo),
       estiloDesc: b.usaApp ? 'Sale donde dice el asistente de salida, navega a los ángulos y por la amura que da la app, vira y traslucha cuando lo dice (layline o role) y actualiza el viento en cada boya.' : (b.E ? (b.E.desc || descripcion(b.E)) : ''),
       modelo: b.modeloNombre, track: b.track, eventos: b.eventos, tiempos: b.tiempos, fin: b.fin, dist: b.dist, maniobras: b.maniobras, consejos: b.consejos,
       salida: b.puntoSalida, trip: b.tripulantes, inicio: b.inicio, fantasma: !!(S.flotaSim[i] && S.flotaSim[i].fantasma), orc: S.flotaSim[i] && S.flotaSim[i].orc, irc: S.flotaSim[i] && S.flotaSim[i].irc,
