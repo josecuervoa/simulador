@@ -148,15 +148,19 @@ details.seccion[open] > summary { border-bottom: 1px solid var(--linea); }
 
 /* Flota */
 .barcos { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); }
-.barco { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 6px 8px; align-items: center; padding: 8px; border: 1px solid var(--linea); border-radius: 10px; align-content: start; }
+.barco { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 6px 8px; align-items: center; padding: 8px; border: 1px solid var(--linea); border-radius: 10px; align-content: start; }
 .barco .pastilla { width: 14px; height: 14px; border-radius: 4px; }
+.barco label.pastilla { position: relative; cursor: pointer; width: 18px; height: 18px; box-shadow: 0 0 0 2px var(--superficie), 0 0 0 3px var(--linea); }
+.barco label.pastilla input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; border: 0; padding: 0; }
+.barco label.pastilla:focus-within { box-shadow: 0 0 0 2px var(--superficie), 0 0 0 4px var(--acento); }
 .barco .pastilla.otro { background: transparent !important; border: 3px solid; }
 .barco input[type=text] { width: 100%; font-weight: 600; }
-.barco .det { grid-column: 2 / 4; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) 60px; gap: 6px; }
+.barco .det { grid-column: 2 / 4; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
 .barco .det label, .orc label { display: grid; gap: 2px; font-size: 12px; color: var(--suave); min-width: 0; }
 .barco details.orc { grid-column: 2 / 4; }
 .barco details.orc summary { cursor: pointer; font-size: 13px; color: var(--acento); }
 .orc .campos-orc { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+.orc .campos-orc.uno { grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); align-items: end; }
 @media (max-width: 420px) { .orc .campos-orc { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .barco.real { border-color: var(--real); }
 
@@ -279,7 +283,7 @@ table.resultados { border-collapse: collapse; width: 100%; min-width: 760px; fon
           <button class="btn sec peq" id="flota-prueba" type="button">Flota de prueba (10)</button>
           <button class="btn sec peq" id="flota-vaciar" type="button">Vaciar</button>
         </div>
-        <p class="nota">Relleno: sigue la app. Hueco: navega a su manera, con el estilo elegido. La tripulación vacía usa la de referencia del barco. En «Datos ORC» van los del certificado, para los tiempos compensados.</p>
+        <p class="nota">Relleno: sigue la app. Hueco: navega a su manera, con el estilo elegido. Toca el cuadrado de color para cambiarlo (un barco y su gemelo pueden llevar el mismo). La tripulación vacía usa la de referencia del barco. La clase (I, II o III) sirve para clasificar por clases en «Resultados». En «Datos ORC» y «Datos IRC» van los de cada certificado, para los tiempos compensados.</p>
         <div class="columnas">
           <div class="grupo">
             <span class="etiqueta">Flotas guardadas</span>
@@ -328,11 +332,15 @@ table.resultados { border-collapse: collapse; width: 100%; min-width: 760px; fon
     <div class="tabla-envoltura"><table class="resultados" id="resultados"></table></div>
   </section>
   <section class="resultados-sec">
-    <h2>Qué hizo cada barco y por qué</h2>
-    <div class="decisiones">
-      <div class="chips" id="dec-barcos"></div>
-      <div id="dec-detalle"></div>
-    </div>
+    <details class="seccion" id="sec-decisiones">
+      <summary><h2>Qué hizo cada barco y por qué</h2><span class="resumen-sec" id="res-decisiones"></span><span class="flecha" aria-hidden="true">›</span></summary>
+      <div class="cuerpo">
+        <div class="decisiones">
+          <div class="chips" id="dec-barcos"></div>
+          <div id="dec-detalle"></div>
+        </div>
+      </div>
+    </details>
   </section>
   <section class="resultados-sec" id="sec-consejos"></section>
 </div>
@@ -340,7 +348,7 @@ table.resultados { border-collapse: collapse; width: 100%; min-width: 760px; fon
 <script>
 globalThis.OM_APP = (function () {
 // ═══════════════════════════════════════════════════════════════════════════
-//  MOTOR DE OJO MARINERO (versión 1.1, revisión 15 · 5-oct-2026)
+//  MOTOR DE OJO MARINERO (versión 1.1, revisión 16 · 6-oct-2026)
 //  Extraído de ojomarinero.jsx: todo lo que va antes de "function Compass".
 //  JavaScript puro, sin React. La fuente es la app: aquí no se edita.
 //  Para el simulador: sustituye motor/motor-ojomarinero.js por este archivo.
@@ -349,7 +357,7 @@ globalThis.OM_APP = (function () {
 
 // Versión del motor (rumbos, bordos, roles, línea de salida). Va en el cuaderno de
 // regata para saber con qué motor aconsejó la app; el simulador la lee al importar.
-const MOTOR_VERSION = "1.1 · 2026-10-05 · rev15";
+const MOTOR_VERSION = "1.1 · 2026-10-06 · rev16";
 
 // ─── POLAR DATA ───────────────────────────────────────────────────────────────
 const POLARS = {
@@ -2504,19 +2512,26 @@ function computeRaceStrategy(allResults, wpBearing, twdFrom, distanceNm, tws, po
   const kSat = Math.max(1.5, tacksAvailable / 3);
   // Amura del último tramo: con n impar, la del primero; con n par, la del segundo.
   // Si no es la de llegada que pide el rodeo de la boya, hay una maniobra más.
-  const tack1 = base.legs[0].tack, tack2 = base.legs[1] ? base.legs[1].tack : -tack1;
+  // UNA SOLA AMURA DE SALIDA. Jugando roles se salía siempre por la amura favorecida del
+  // plan libre (tackLibre), aunque el plan de dos bordos —el que respeta el lado de la boya
+  // y la amura en la que ya vas— saliera por la otra (tackPlan). En las regatas simuladas
+  // discrepaban en el 64–74 % de las ceñidas con roles, y seguir la de los roles apenas
+  // mejoraba (−0,04 a −0,13 %) y perdía en ceñidas cortas por la virada de más. Ahora se
+  // prueban las dos y la de los roles solo se queda si no cuesta más (la virada extra al
+  // empezar o al llegar a la boya está en netTime); si empatan, la favorecida.
+  const tackLibre = base.legs[0].tack, tackPlan = baseRodeo.legs[0].tack;
   // Con 2 tramos se navega el plan que respeta el lado de la boya
-  const ultimaAmura = n => n === 2 ? baseRodeo.legs[baseRodeo.legs.length - 1].tack : (n % 2 === 1 ? tack1 : tack2);
+  const ultimaAmura = (n, t1 = tackLibre) => n === 2 ? baseRodeo.legs[baseRodeo.legs.length - 1].tack : (n % 2 === 1 ? t1 : -t1);
   // …y la del primero: si no es la amura en la que ya vas (en la salida, estribor),
   // hay que virar nada más empezar. planRoute lo cuenta; aquí no se contaba y el
   // «Tiempo a boya» de la estrategia salía unos segundos menor que el del plan.
-  const primeraAmura = n => n === 2 ? baseRodeo.legs[0].tack : tack1;
-  function netTime(n) {
+  const primeraAmura = (n, t1 = tackLibre) => n === 2 ? baseRodeo.legs[0].tack : t1;
+  function netTime(n, t1 = tackLibre) {
     const capture = amplitude > 0 ? (1 - Math.exp(-(n - 2) / kSat)) : 0;
     const gain = oscType === "persistent" ? (n === 2 ? gainPers : 0) : (maxGainPct / 100) * capture;
     const sailTime = totalTimeMin / (1 + gain);
-    const extraBoya = req && ultimaAmura(n) !== req ? 1 : 0;
-    const extraInicio = req && amuraActual && primeraAmura(n) !== amuraActual ? 1 : 0;
+    const extraBoya = req && ultimaAmura(n, t1) !== req ? 1 : 0;
+    const extraInicio = req && amuraActual && primeraAmura(n, t1) !== amuraActual ? 1 : 0;
     const tackPenalty = (n - 1 + extraBoya + extraInicio) * tackCostMin;   // n tramos → n−1 viradas (+1 en la boya, +1 al empezar)
     return { net: sailTime + tackPenalty, gain, sailTime, tackPenalty, extraBoya, extraInicio };
   }
@@ -2533,15 +2548,18 @@ function computeRaceStrategy(allResults, wpBearing, twdFrom, distanceNm, tws, po
   // y acaban en la amura de llegada): así se juegan los roles sin llegar a la
   // boya con la amura que obliga a virar en ella.
   const valido = n => (n === 2) || (amplitude > 0 && oscType !== "persistent" && (n % 2 === 1 || !!req));
-  let bestN = 2, bestData = netTime(2), bestNet = bestData.net;
+  let bestN = 2, bestData = netTime(2), bestNet = bestData.net, t1Elegida = tackLibre;
   const maxN = Math.min(tacksAvailable, 11);
-  for (let n = 3; n <= maxN; n++) {
-    if (!valido(n)) continue;
-    const r = netTime(n);
-    if (r.net < bestNet) { bestNet = r.net; bestN = n; bestData = r; }
+  for (const t1 of (tackPlan !== tackLibre ? [tackLibre, tackPlan] : [tackLibre])) {
+    for (let n = 3; n <= maxN; n++) {
+      if (!valido(n)) continue;
+      const r = netTime(n, t1);
+      if (r.net < bestNet - 1e-9) { bestNet = r.net; bestN = n; bestData = r; t1Elegida = t1; }
+    }
   }
   let numTacks = bestN;
-  if (numTacks === 2) base = baseRodeo;
+  // Con 2 tramos, o si con roles conviene salir por la amura del plan, se usa el orden del plan
+  if (numTacks === 2 || t1Elegida !== tackLibre) base = baseRodeo;
   // ── VMG NETO de 2 bordadas (incluye su propio coste de 2 viradas) ──
   // Comparamos neto contra neto para que la ganancia mostrada sea REAL y coherente con las barras.
   // (sin ninguna ganancia de roles: con rol persistente netTime(2) ya la incluye)
@@ -2700,7 +2718,7 @@ function computeRaceStrategy(allResults, wpBearing, twdFrom, distanceNm, tws, po
   }
 
   return { numTacks, vmgRace, vmgTwoTacks: vmgTwoTacksNet, gainPct, favoredSide, legs,
-           rodeoReq: req, llegaCon: ultimaAmura(numTacks), extraBoya: bestData.extraBoya,
+           rodeoReq: req, llegaCon: ultimaAmura(numTacks, t1Elegida), extraBoya: bestData.extraBoya,
            amplitude, period, oscType,
            totalTimeRace,
            totalTimeTwoTacks: totalTimeMin,
@@ -2766,7 +2784,26 @@ const APP = (typeof globalThis !== 'undefined' && globalThis.OM_APP) || cargarMo
 const RAD = Math.PI / 180, KN = 1852 / 3600;
 const norm = a => ((a % 360) + 360) % 360;
 const dif = (a, b) => ((a - b + 540) % 360) - 180;        // a − b en (−180, 180]
-function azar(semilla) { let s = semilla >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+// Generador de azar. La semilla se MEZCLA antes de usarla (lowbias32) y el generador es
+// mulberry32. Antes era un congruencial sin mezcla: su primera tirada crecía casi en línea
+// recta con la semilla, y las 4 semillas de cada regata (+0, +13, +26, +39) daban casi la
+// misma fase de los roles (99°, 101°, 103°, 105° en r1). Revisión del 6-oct-2026 (README §14).
+function mezcla(x) {
+  x = (x >>> 0) ^ 0x9e3779b9;
+  x = Math.imul(x ^ (x >>> 16), 0x7feb352d); x = Math.imul(x ^ (x >>> 15), 0x846ca68b);
+  return (x ^ (x >>> 16)) >>> 0;
+}
+function azar(semilla) {
+  let s = mezcla(Math.round(semilla));
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+// Número fijo para un texto (FNV-1a): el azar de cada barco depende de quién es, no de su sitio en la flota
+function hashTexto(txt) { let h = 0x811c9dc5; for (const ch of String(txt)) h = Math.imul(h ^ ch.codePointAt(0), 0x01000193); return h >>> 0; }
 function gauss(r) { let u = 0, v = 0; while (u === 0) u = r(); v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
 // Proceso de Ornstein-Uhlenbeck precalculado (ruido con memoria)
 function ou(r, n, dt, tau, sd) {
@@ -2812,7 +2849,13 @@ function velPolar(P, twa, tws) {
   } else {
     let j = 0; while (pts[j + 1][0] < a) j++;
     const [a0, v0] = pts[j], [a1, v1] = pts[j + 1];
-    v = v0 + (v1 - v0) * (a - a0) / (a1 - a0);
+    if (rA && a0 >= 120 && (a1 === rA || a0 === rA)) {
+      // Junto a la popa óptima se interpola el VMG, no la velocidad: interpolando la
+      // velocidad salía una "barriga" de VMG y el óptimo del simulador quedaba hasta 8°
+      // más arriba que el del certificado (J/24 a 20 kn: 168° frente a 176°)
+      const c0 = Math.cos((180 - a0) * RAD), c1 = Math.cos((180 - a1) * RAD), ca = Math.cos((180 - a) * RAD);
+      v = (v0 * c0 + (v1 * c1 - v0 * c0) * (a - a0) / (a1 - a0)) / ca;
+    } else v = v0 + (v1 - v0) * (a - a0) / (a1 - a0);
   }
   return Math.max(0, v * f);
 }
@@ -3020,17 +3063,28 @@ function prepararSimulacion(c) {
   for (let t = -300; t <= 0; t += 10) { const w = viento(0, 0, t); sx += Math.sin(w.dir * RAD); sy += Math.cos(w.dir * RAD); sv += w.vel; }
   const twdMedido = Math.round(norm(Math.atan2(sx, sy) / RAD)), twsMedido = Math.round(sv / 31);
   const fe = APP.favoredEnd(aLatLon(campo.comite.x, campo.comite.y), aLatLon(campo.pin.x, campo.pin.y), twdMedido);
-  const r = azar(c.semilla * 7 + 3);
+  // Cada barco tiene su propio azar (timón, retraso en la salida, error a ojo), sembrado con
+  // la regata y con quién es (nombre, modelo, estilo). Antes salía de un generador común, uno
+  // detrás de otro: quitar o meter un barco delante cambiaba el tiempo de todos los de detrás.
+  const vistos = {};
+  const semillaDe = f => {
+    const clave = `${f.nombre || ''}|${f.modelo}|${f.estilo}`;
+    vistos[clave] = (vistos[clave] || 0) + 1;      // dos barcos iguales: azar distinto
+    return mezcla(mezcla(c.semilla * 7 + 3) ^ hashTexto(clave + '#' + vistos[clave]));
+  };
+  // Ruido de timón para toda la regata (antes, 10.000 s fijos: más allá se quedaba congelado)
+  const nTimon = Math.ceil((c.duracionMax || 3 * 3600) / 2) + 2;
 
   const barcos = c.flota.map((f, i) => {
     const P = APP.POLARS[f.modelo];
+    const semilla = semillaDe(f), r = azar(semilla), retraso = r() * 4;   // el retraso, antes que el timón: así no depende de la duración
     const ref = APP.crewOptimo(P.loa, P.crewKg);
     return { id: i, nombre: f.nombre, modelo: f.modelo, modeloNombre: P.shortName || P.name, P,
              usaApp: f.estilo === 'app', estilo: f.estilo, E: f.estilo === 'app' ? null : (f.E || ESTILOS[f.estilo] || ARQUETIPOS[f.estilo] || null),
              tripulantes: f.tripulantes || Math.max(2, ref + (c.tripulacionDelta || 0)), ref,
              color: f.color, x: 0, y: 0, v: 0, rumbo: 0, s: -1, tramo: 0, ultManiobra: -999, fin: null,
              eventos: [], track: [], tiempos: [], consejos: [], twdIn: twdMedido, twsIn: twsMedido,
-             ruidoTimon: ou(r, 5000, 2, 60, 1.5), dist: 0, maniobras: 0, twaObj: {}, retraso: r() * 4, inicio: f.inicio || null };
+             ruidoTimon: ou(r, nTimon, 2, 60, 1.5), dist: 0, maniobras: 0, twaObj: {}, retraso, inicio: f.inicio || null, semilla };
   });
 
   // ── Salida: sitio en la línea y primera amura ──
@@ -3039,7 +3093,8 @@ function prepararSimulacion(c) {
     if (b.usaApp) {
       // El asistente de salida: extremo favorecido según el viento tecleado
       const a = consultarApp(b, sim, recorrido[0].m, twdMedido, twsMedido, campo.mitad, recorrido[0].rodeo || 'babor');
-      const primero = amuraDeSalida(a, twdMedido, sim, recorrido[0].tipo, false);
+      const primero = amuraDeSalida(a, twdMedido, sim, recorrido[0].tipo, !b.inicio);
+      b.primeroSalida = primero;   // la amura del consejo de salida es con la que se sale
       f = fe.favored === 'baliza' ? 0.1 : fe.favored === 'comité' ? 0.9 : (primero < 0 ? 0.3 : 0.7);
       b.consejos.push({ t: 0, donde: 'Salida', texto: `Extremo favorecido: ${fe.favored} (${fe.biasDeg}°). Sal en ${Math.round(rumboDeSalida(a, primero, twdMedido))}° (${amuraDe(primero)})` +
         (a.race && a.race.numTacks > 2 ? `, juega los roles: ${a.race.numTacks - 1} viradas` : ', 2 bordadas') });
@@ -3090,7 +3145,10 @@ function avanzar(s, tHasta) {
 // el mismo punto de salida del rodeo y, con el recorrido torcido, el barco volvía a
 // pasar por encima de la boya.
 function alSalir(b, t, motivo, sim) {
-  if (t <= 0) maniobra(b, t, motivo, sim); else b.alSalir = { motivo, s: -b.s, desde: { x: b.x, y: b.y } };
+  // En la salida se maniobra nada más arrancar: a su hora si sale tarde (el fantasma sale cuando
+  // cruzó el barco real). Antes la maniobra se apuntaba en t = 0 aunque el barco aún esperaba.
+  if (t <= 0) { if (b.retraso > 0) b.alSalir = { motivo, s: -b.s, desde: { x: b.x, y: b.y }, alArrancar: true }; else maniobra(b, t, motivo, sim); }
+  else b.alSalir = { motivo, s: -b.s, desde: { x: b.x, y: b.y } };
 }
 function iniciarTramo(b, t, viento, sim, recorrido, twdIn, twsIn) {
   const leg = recorrido[b.tramo], c = sim.c;
@@ -3105,7 +3163,11 @@ function iniciarTramo(b, t, viento, sim, recorrido, twdIn, twsIn) {
     b.directo = !!a.plan.directReachable;
     b.jugarRoles = !!(a.race && a.race.numTacks > 2 && c.app.tipo === 'oscillating');
     b.umbralRol = Math.max(4, 0.4 * c.app.amp);
-    const primero = b.directo ? lado(a.plan.legs[0].boatHeading, b.twdIn) : amuraDeSalida(a, b.twdIn, sim, leg.tipo);
+    // En la salida manda el consejo de salida (calculado antes, con el que se eligió el sitio
+    // en la línea); antes se recalculaba desde el punto de salida y, con 'roles', 135 de 240
+    // barcos decían «Sal en … (estribor)» y salían amurados a babor. El fantasma, desde donde cruzó.
+    const enSalida = t === 0 && b.primeroSalida && !b.inicio;
+    const primero = enSalida ? b.primeroSalida : b.directo ? lado(a.plan.legs[0].boatHeading, b.twdIn) : amuraDeSalida(a, b.twdIn, sim, leg.tipo, !(t === 0 && b.primeroSalida));
     b.twaObj = { [primero]: twaApp(a.plan, primero, b.twdIn), [-primero]: twaApp(a.plan, -primero, b.twdIn) };
     if (t > 0) b.consejos.push({ t, donde: leg.nombre, texto: (b.directo ? `Directo a ${Math.round(a.plan.legs[0].boatHeading)}°` :
       `Sal en ${Math.round(rumboDeSalida(a, primero, b.twdIn))}° (${amuraDe(primero)}), TWA ${Math.round(b.twaObj[primero])}°`) +
@@ -3123,7 +3185,7 @@ function iniciarTramo(b, t, viento, sim, recorrido, twdIn, twsIn) {
     if (popa === 'polar') { const rp = APP.findOptimalHeading(b.P, w.vel, w.dir, norm(w.dir + 180), 0, 0, b.ref, 0); popa = Math.round(Math.abs(dif(rp[0].boatHeading, w.dir))); }
     b.twaObj = { 1: leg.tipo === 'ceñida' ? b.twaCeñida : popa, [-1]: leg.tipo === 'ceñida' ? b.twaCeñida : popa };
     b.mediaViento = w.dir;
-    b.errorOjo = gauss(azar(b.id * 97 + t)) * (E.errorOjo != null ? E.errorOjo : c.errorOjo != null ? c.errorOjo : 3);            // cómo calcula la layline a ojo
+    b.errorOjo = gauss(azar(b.semilla + 7919 * (b.tramo + 1))) * (E.errorOjo != null ? E.errorOjo : c.errorOjo != null ? c.errorOjo : 3);            // cómo calcula la layline a ojo
     // Banda: −1 izquierda (estribor), +1 derecha (babor). Fija; 'primero' = la amura
     // buena con el viento de ese momento, hasta la layline (corner banger); 'presion' =
     // hacia el lado con más viento si se nota (mira 400 m a cada lado a media ceñida)
@@ -3149,6 +3211,22 @@ function maniobra(b, t, motivo, sim) {
   b.eventos.push({ t: Math.round(t), tipo: esVirada ? 'virada' : 'trasluchada', motivo, x: Math.round(b.x), y: Math.round(b.y), amura: amuraDe(b.s) });
 }
 
+// En la llegada se apunta a donde el rumbo de esta amura corta la línea (sin los extremos),
+// no a su centro: apuntando al centro, al pasar a 1 m de él el rumbo cambiaba de lado y el
+// barco trasluchaba en el último segundo (74 de 480 barcos maniobraban en los 10 s antes de
+// llegar). Si el rumbo no corta la línea, al extremo más cercano al corte; si va hacia fuera, al centro.
+// Solo en los últimos 200 m: de lejos se sigue apuntando al centro de la línea.
+function puntoDeLinea(campo, p, rumbo) {
+  const { pin, comite } = campo, dx = comite.x - pin.x, dy = comite.y - pin.y;
+  const ux = Math.sin(rumbo * RAD), uy = Math.cos(rumbo * RAD);
+  const det = ux * dy - uy * dx;                              // p + s·u = pin + f·(dx,dy)
+  if (Math.abs(det) < 1e-9) return campo.mitad;
+  const qx = pin.x - p.x, qy = pin.y - p.y;
+  const sAvance = (qx * dy - qy * dx) / det, f = (qx * uy - qy * ux) / det;
+  if (sAvance <= 0) return campo.mitad;
+  const fc = Math.max(0.1, Math.min(0.9, f));
+  return { x: pin.x + dx * fc, y: pin.y + dy * fc };
+}
 function paso(b, t, DT, viento, sim, recorrido) {
   const c = sim.c, leg = recorrido[b.tramo], w = viento(b.x, b.y, t);
   // En ceñida se apunta un poco por encima de la boya (unos 15 m, más o menos una
@@ -3163,9 +3241,13 @@ function paso(b, t, DT, viento, sim, recorrido) {
     ? (b.s === sentido
         ? { x: leg.m.x + Math.sin((w.dir + 90 * sentido) * RAD) * R, y: leg.m.y + Math.cos((w.dir + 90 * sentido) * RAD) * R }
         : { x: leg.m.x + Math.sin(w.dir * RAD) * 15, y: leg.m.y + Math.cos(w.dir * RAD) * 15 })
-    : leg.m;
+    : leg.linea && dist(b, leg.m) < 200 ? puntoDeLinea(sim.campo, b, norm(w.dir + b.s * (b.twaObj[b.s] || b.twaObj[-b.s] || 45))) : leg.m;
   const brg = rumboA(b, M), d = dist(b, M);
   const tim = b.ruidoTimon[Math.min(b.ruidoTimon.length - 1, Math.floor(t / 2))];
+  // Su idea del viento medio (≈4 min), en cada segundo. Antes solo se ponía al día cuando
+  // el barco decidía (no tras maniobrar, ni yendo directo, ni cerca de la boya) y luego veía
+  // "roles" de 30° que no existían.
+  if (!b.usaApp && b.mediaViento != null) b.mediaViento = norm(b.mediaViento + dif(w.dir, b.mediaViento) * 0.004);
   const polarMin = APP.polarAngleRange(b.P, w.vel).min;
 
   // ── Decisiones (primero se decide si se maniobra; después, el rumbo) ──
@@ -3189,7 +3271,7 @@ function paso(b, t, DT, viento, sim, recorrido) {
     // En popa, si la boya ya queda por encima (pasada o a un través), se va a ella
     return { twa, directo: (b.usaApp && b.directo) || esta || twaBoya < 100 };
   };
-  if (b.alSalir && dist(b, b.alSalir.desde) >= 20) { const q = b.alSalir; b.alSalir = null; if (b.s !== q.s) maniobra(b, t, q.motivo, sim); }
+  if (b.alSalir && (b.alSalir.alArrancar || dist(b, b.alSalir.desde) >= 20)) { const q = b.alSalir; b.alSalir = null; if (b.s !== q.s) maniobra(b, t, q.motivo, sim); }
   let e = estado();
   // A menos de 100 m de la boya ya no se decide virar ni trasluchar (se llega y se rodea),
   // salvo que la boya quede dentro de la zona muerta: entonces vas corto y hay que virar
@@ -3246,7 +3328,9 @@ function paso(b, t, DT, viento, sim, recorrido) {
 
   // ── Boya ──
   if (leg.linea) {
-    if (cruzaLinea(sim.campo, antes, b, leg.ambos)) { b.tiempos.push({ marca: leg.nombre, t: Math.round(t), amura: amuraDe(b.s) }); b.fin = t; registrar(b, t, w, twaReal, true); }
+    // Hora de llegada: dentro del segundo, donde cruza (antes, el principio del segundo)
+    const f = cruzaLinea(sim.campo, antes, b, leg.ambos);
+    if (f) { b.fin = Math.round((t + f * DT) * 10) / 10; b.tiempos.push({ marca: leg.nombre, t: Math.round(b.fin), amura: amuraDe(b.s) }); registrar(b, t, w, twaReal, true); }
   } else if (dist(b, leg.m) < RODEO) { if (leg.generico) empezarRodeoGen(b, t, leg, sim, recorrido, w); else empezarRodeo(b, t, leg, sim); }
 }
 
@@ -3305,12 +3389,39 @@ function empezarRodeoGen(b, t, leg, sim, recorrido, w) {
   if (Math.abs(dif(h, norm(w.dir + 180))) < 12) sal = -sent;   // en popa redonda se sale como en la de barlovento
   const lado_ = sent > 0 ? 'babor' : 'estribor';
   if (b.s !== sal) maniobra(b, t, (b.tipo === 'ceñida' ? 'Virada' : 'Trasluchada') + ` en la boya (se deja por ${lado_})`, sim);
+  // Como en el barlovento-sotavento: recto hasta el punto del círculo de radio R en el que su
+  // rumbo es tangente al giro, y desde ahí el arco. Antes giraba desde donde entraba en la zona
+  // (unos 25 m de radio) y el rumbo saltaba de golpe 50–60° a la tangente: costaba 8–17 s por boya.
+  const angT = (90 - b.rumbo - sent * 90) * RAD;
+  const pT = { x: leg.m.x + Math.cos(angT) * R, y: leg.m.y + Math.sin(angT) * R };
+  if (dist(b, pT) > 0.5 && Math.abs(dif(rumboA(b, pT), b.rumbo)) < 60) {
+    b.rodeo = { leg, gen: true, sent, ang: angT, radio: R, hSal: h, girado: 0, pre: pT };
+    return;
+  }
+  // Llega por el lado malo (o ya encima): gira desde donde está
   const radio = Math.max(8, Math.min(RODEO, dist(b, leg.m)));
   b.rodeo = { leg, gen: true, sent, ang: Math.atan2(b.y - leg.m.y, b.x - leg.m.x), radio, hSal: h, girado: 0 };
 }
 function rodear(b, t, DT, viento, sim, recorrido) {
   const r = b.rodeo, leg = r.leg, w = viento(b.x, b.y, t);
   if (r.gen) {
+    const salir = () => {
+      b.rodeo = null; b.rumbo = r.hSal;
+      b.tiempos.push({ marca: leg.nombre, t: Math.round(t), amura: amuraDe(b.s) });
+      b.v *= 0.9; b.tramo++;
+      iniciarTramo(b, t, viento, sim, recorrido);
+    };
+    if (r.pre) {
+      // Tramo recto hasta el punto de tangencia
+      const dd = dist(b, r.pre), avance = Math.max(1.5, b.v) * KN * DT, h = rumboA(b, r.pre);
+      if (avance >= dd) { b.x = r.pre.x; b.y = r.pre.y; r.pre = null; }
+      else { b.x += Math.sin(h * RAD) * avance; b.y += Math.cos(h * RAD) * avance; }
+      b.dist += Math.min(avance, dd);
+      b.rumbo = h; b.v *= 0.995;
+      registrar(b, t, w, Math.abs(dif(b.rumbo, w.dir)), true);
+      if (!r.pre && Math.abs(dif(b.rumbo, r.hSal)) < 12) salir();   // ya va al rumbo de salida: sin giro
+      return;
+    }
     const vel = Math.max(1.5, b.v), dA = r.sent * vel * KN * DT / r.radio;
     r.ang += dA; r.girado += Math.abs(dA) / RAD;
     const nx = leg.m.x + Math.cos(r.ang) * r.radio, ny = leg.m.y + Math.sin(r.ang) * r.radio;
@@ -3318,12 +3429,7 @@ function rodear(b, t, DT, viento, sim, recorrido) {
     b.rumbo = norm(90 - (r.ang / RAD + r.sent * 90));         // tangente, girando hacia la boya
     b.v *= 0.995;
     registrar(b, t, w, Math.abs(dif(b.rumbo, w.dir)), true);
-    if ((r.girado > 20 && Math.abs(dif(b.rumbo, r.hSal)) < 12) || r.girado >= 420) {
-      b.rodeo = null; b.rumbo = r.hSal;
-      b.tiempos.push({ marca: leg.nombre, t: Math.round(t), amura: amuraDe(b.s) });
-      b.v *= 0.9; b.tramo++;
-      iniciarTramo(b, t, viento, sim, recorrido);
-    }
+    if ((r.girado > 20 && Math.abs(dif(b.rumbo, r.hSal)) < 12) || r.girado >= 420) salir();
     return;
   }
   const E = ejes(sim.campo);
@@ -3356,12 +3462,16 @@ function rodear(b, t, DT, viento, sim, recorrido) {
 }
 function cruzaLinea(campo, p0, p1, ambos) {
   const a = campo.pin, c = campo.comite, lado = p => (c.x - a.x) * (p.y - a.y) - (c.y - a.y) * (p.x - a.x);
-  const s0 = lado(p0), s1 = lado(p1);
+  // Barlovento es el lado de la línea en el que está la boya de barlovento. Antes se suponía el
+  // comité a la derecha mirando al viento; con un campo importado con el comité a la izquierda
+  // el cruce no contaba.
+  const sg = lado(campo.barlo) < 0 ? -1 : 1;
+  const s0 = sg * lado(p0), s1 = sg * lado(p1);
   // En el barlovento-sotavento se llega desde barlovento; en un recorrido por boyas, desde donde sea
   if (ambos ? !((s0 > 0 && s1 <= 0) || (s0 < 0 && s1 >= 0)) : !(s0 > 0 && s1 <= 0)) return false;
   const f = s0 / (s0 - s1), x = p0.x + (p1.x - p0.x) * f, y = p0.y + (p1.y - p0.y) * f;
   const k = ((x - a.x) * (c.x - a.x) + (y - a.y) * (c.y - a.y)) / ((c.x - a.x) ** 2 + (c.y - a.y) ** 2);
-  return k >= 0 && k <= 1;
+  return k >= 0 && k <= 1 ? Math.max(1e-6, f) : false;      // la fracción del paso en la que cruza
 }
 
 function registrar(b, t, w, twa, siempre) {
@@ -3417,27 +3527,30 @@ function decideAppPopa(b, t, w, brg, d, laOtraLlega, sim, leg) {
 // ── Decisiones sin app ──
 function decideSinApp(b, t, w, brg, d, laOtraLlega, sim, leg) {
   const E = b.E;
-  b.mediaViento = norm(b.mediaViento + dif(w.dir, b.mediaViento) * 0.004);   // su idea del viento medio (≈4 min)
   // Layline a ojo (con su error), y el apurador se pasa unos grados
   const twaOtra = b.twaObj[-b.s] || b.twaObj[b.s];
   const margen = E.pasarse + b.errorOjo;
   const twaBoya = Math.abs(dif(brg, w.dir));
   if (lado(brg, w.dir) === -b.s && twaBoya >= twaOtra + margen - 1) { maniobra(b, t, 'Layline (a ojo)', sim); return; }
-  // Conservador: no se aleja del eje del campo (lo mide desde la boya, con el viento de ahora)
-  if (E.limiteBanda && d > 250 && t - b.ultManiobra > 25) {
-    const u = (b.x - leg.m.x) * Math.cos(w.dir * RAD) - (b.y - leg.m.y) * Math.sin(w.dir * RAD);   // + = a la derecha
-    if (Math.abs(u) > E.limiteBanda && Math.sign(u) === b.s) { maniobra(b, t, 'Vuelve hacia el centro (no se va a las bandas)', sim); return; }
+  // Conservador: no se aleja del eje del campo (lo mide desde la boya, con su viento medio).
+  // Antes lo medía con el viento de cada momento: con roles de ±10° el eje se movía ±300 m y
+  // el barco iba y venía entre «role en contra» y «vuelve al centro».
+  let borde = 0;                       // ±1: cerca del borde de su banda (o fuera), por ese lado
+  if (E.limiteBanda) {
+    const u = (b.x - leg.m.x) * Math.cos(b.mediaViento * RAD) - (b.y - leg.m.y) * Math.sin(b.mediaViento * RAD);   // + = a la derecha
+    if (d > 250 && t - b.ultManiobra > 25 && Math.abs(u) > E.limiteBanda && Math.sign(u) === b.s) { maniobra(b, t, 'Vuelve hacia el centro (no se va a las bandas)', sim); return; }
+    if (Math.abs(u) > 0.75 * E.limiteBanda) borde = Math.sign(u);
   }
   if (b.banda) return;
   if (E.cadaTanto && t - b.ultManiobra > E.cadaTanto) { maniobra(b, t, 'Toca virar', sim); return; }
   if (E.rolada && d > 250) {
     const giro = dif(w.dir, b.mediaViento), enContra = b.s * giro;
-    if (enContra > E.rolada) maniobra(b, t, `Role en contra ${Math.round(enContra)}° (a ojo)`, sim);
+    // (cerca del borde de su banda o fuera, no vira por un role si la virada le lleva hacia fuera)
+    if (enContra > E.rolada && borde !== -b.s) maniobra(b, t, `Role en contra ${Math.round(enContra)}° (a ojo)`, sim);
   }
 }
 function decideSinAppPopa(b, t, w, brg, d, laOtraLlega, sim, leg) {
   const E = b.E;
-  b.mediaViento = norm(b.mediaViento + dif(w.dir, b.mediaViento) * 0.004);
   const twaBoya = Math.abs(dif(brg, w.dir));
   const twaOtra = b.twaObj[-b.s] || b.twaObj[b.s];
   const margen = E.pasarse ? E.pasarse : 0;
@@ -3892,7 +4005,7 @@ return module.exports;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  TIEMPOS COMPENSADOS ORC
+//  TIEMPOS COMPENSADOS ORC E IRC
 //
 //  Con los datos del certificado ORC de cada barco (los del club, ORC Club, valen igual):
 //   · ToT  (Time on Time):      compensado = real × ToT
@@ -3901,9 +4014,12 @@ return module.exports;
 //     el anuncio de regata dice cuál se usa. Por defecto: bajo < 9 kn ≤ medio ≤ 14 kn < alto.
 //  El PCS (curva de rendimiento) necesita la polar del certificado y el recorrido, y no
 //  está aquí todavía.
+//  Con el certificado IRC (RTC 2025-2028, art. 207): compensado = real × TCC (tiempo sobre tiempo).
+//  Si algún compensado sale negativo (ToD), se suma a todos lo mismo para que ninguno lo sea
+//  (RTC, art. 204.2 B): el orden no cambia.
 //
-//  barcos = [{ id, fin (s), orc: { tot, tod, tnBajo, tnMedio, tnAlto } }]
-//  opciones = { metodo: 'real'|'tot'|'tod'|'tn', distanciaNm, vientoMedio, banda: 'auto'|'bajo'|'medio'|'alto',
+//  barcos = [{ id, fin (s), orc: { tot, tod, tnBajo, tnMedio, tnAlto }, irc: { tcc } }]
+//  opciones = { metodo: 'real'|'tot'|'tod'|'tn'|'irc', distanciaNm, vientoMedio, banda: 'auto'|'bajo'|'medio'|'alto',
 //               umbralBajo (9), umbralAlto (14) }
 //  Devuelve la clasificación: [{ id, real, compensado, falta }] ordenada (los que no tienen
 //  dato al final, con falta = el dato que necesitan).
@@ -3914,6 +4030,7 @@ return module.exports;
     tot: { nombre: 'ToT (tiempo sobre tiempo)', dato: 'tot' },
     tod: { nombre: 'ToD (tiempo sobre distancia)', dato: 'tod' },
     tn: { nombre: 'Triple número' },
+    irc: { nombre: 'IRC (TCC, tiempo sobre tiempo)', dato: 'tcc' },
   };
   function bandaTN(vientoMedio, o = {}) {
     if (o.banda && o.banda !== 'auto') return o.banda;
@@ -3937,11 +4054,15 @@ return module.exports;
         if (!valido(opciones.distanciaNm)) return { id: b.id, real, compensado: null, falta: 'distancia' };
         return { id: b.id, real, compensado: real - orc.tod * opciones.distanciaNm, falta: null };
       }
+      if (metodo === 'irc') { const tcc = (b.irc || {}).tcc; return valido(tcc) ? { id: b.id, real, compensado: real * tcc, falta: null } : { id: b.id, real, compensado: null, falta: 'tcc' }; }
       if (metodo === 'tn') { const k = DATO_TN[banda]; return valido(orc[k]) ? { id: b.id, real, compensado: real * orc[k], falta: null } : { id: b.id, real, compensado: null, falta: k }; }
       throw new Error('Método de compensación desconocido: ' + metodo);
     });
     filas.sort((a, b) => (a.compensado == null) - (b.compensado == null) || (a.compensado - b.compensado) || 0);
-    return { filas, metodo, banda: metodo === 'tn' ? banda : null };
+    const minimo = Math.min(...filas.filter(f => f.compensado != null).map(f => f.compensado));
+    const suma = minimo < 0 ? -minimo : 0;
+    if (suma) for (const f of filas) if (f.compensado != null) f.compensado += suma;
+    return { filas, metodo, banda: metodo === 'tn' ? banda : null, suma };
   }
 
   // Leer los números tal como los escribe uno (coma decimal, o ToD en m:ss)
@@ -4038,13 +4159,15 @@ window.OM_DATOS = {"REGATAS":[{"id":"r1","titulo":"Día de manual","resumen":"12
   const todosEstilos = () => [...Object.keys(DE_SERIE), ...Object.keys(MIOS())];
   const limpiarEstilo = E => { const o = { ...E }; delete o.actualizado; return o; };
 
+  // La flota de prueba: cada barco con el color de su gemelo con app (el de la app, relleno; el otro, hueco)
+  const flotaPrueba = () => D.FLOTA.map(f => ({ ...f, color: (D.FLOTA.find(g => g.modelo === f.modelo && g.estilo === 'app') || f).color, tripulantes: null }));
   // ═══ ESTADO ════════════════════════════════════════════════════════════════
   const S = {
     cond: null, origen: 'prueba', preset: 'r1', titulo: '', resumen: '', semillaAzar: 0,
-    flota: leerLocal('om-sim-flota-v2') || D.FLOTA.map(f => ({ ...f, tripulantes: null })),
-    imp: null, impFuente: null, impOpc: { offset: 0, cruceOffset: 0, vueltas: 0, eje: null, modelo: null, fantasma: true, orc: {} },
+    flota: leerLocal('om-sim-flota-v2') || flotaPrueba(),
+    imp: null, impFuente: null, impOpc: { offset: 0, cruceOffset: 0, vueltas: 0, eje: null, modelo: null, fantasma: true, orc: {}, irc: {}, clase: '' },
     sim: null, barcos: [], tmax: 0, t: 0, jugando: false, ultimo: null, ocultos: new Set(), simulando: false, viento: [],
-    metodo: 'real', banda: 'auto', decId: null, flotaSim: [],
+    metodo: 'real', banda: 'auto', decId: null, flotaSim: [], clase: '',
   };
   const guardarFlotaActual = () => guardarLocal('om-sim-flota-v2', S.flota);
 
@@ -4279,41 +4402,66 @@ window.OM_DATOS = {"REGATAS":[{"id":"r1","titulo":"Día de manual","resumen":"12
   // ═══ FLOTA ═════════════════════════════════════════════════════════════════
   const CAMPOS_ORC = [['tot', 'ToT'], ['tod', 'ToD s/milla'], ['tnBajo', 'TN bajo'], ['tnMedio', 'TN medio'], ['tnAlto', 'TN alto']];
   const orcHtml = (orc, pref) => `<details class="orc"><summary>Datos ORC${Object.values(orc || {}).some(v => v != null && v !== '') ? ' ✓' : ''}</summary><div class="campos-orc">${CAMPOS_ORC.map(([k, n]) => `<label>${n}<input type="text" inputmode="decimal" id="${pref}-${k}" data-orc="${k}" value="${orc && orc[k] != null ? orc[k] : ''}" placeholder="—"></label>`).join('')}</div></details>`;
+  // IRC: un solo número, el TCC del certificado (compensado = real × TCC)
+  const ircHtml = (irc, pref) => `<details class="orc"><summary>Datos IRC${irc && irc.tcc != null ? ' ✓' : ''}</summary><div class="campos-orc uno"><label>TCC<input type="text" inputmode="decimal" id="${pref}-tcc" data-irc="tcc" value="${irc && irc.tcc != null ? irc.tcc : ''}" placeholder="—"></label><span class="nota">Tiempo compensado = tiempo real × TCC</span></div></details>`;
+  // Clase de cada barco (la del club: I, II o III). El RTC de la RFEV (art. 201) divide la flota
+  // ORC en clases 0–5 según el CDL; aquí se elige a mano y sirve para clasificar por clases.
+  const CLASES = ['I', 'II', 'III'];
+  const selClase = (v, id) => `<select id="${id}" data-c="clase"><option value="" ${!v ? 'selected' : ''}>—</option>${CLASES.map(k => `<option value="${k}" ${v === k ? 'selected' : ''}>${k}</option>`).join('')}</select>`;
+  // Color y clase no cambian la simulación: se aplican a lo ya simulado sin volver a simular
+  function aplicarAVista() {
+    if (!S.sim || S.simulando) return;
+    for (const b of S.barcos) {
+      if (b.real || b.fantasma) { b.clase = S.impOpc.clase || ''; b.orc = S.impOpc.orc; b.irc = S.impOpc.irc; continue; }
+      const src = S.flota.find(f => f.nombre === b.nombre); if (src) { b.color = src.color; b.clase = src.clase || ''; b.orc = src.orc; b.irc = src.irc; }
+    }
+    dibujar(); resultados(); decisiones(); consejos();
+  }
   function pintarFlota() {
     const opcEstilos = id => `<option value="app" ${id === 'app' ? 'selected' : ''}>Sigue la app</option>` +
       [...todosEstilos(), ...Object.keys(OCULTOS).filter(k => id === k)].map(k => `<option value="${esc(k)}" ${id === k ? 'selected' : ''}>${esc(estilo(k).nombre)}${MIOS()[k] ? ' (propio)' : ''}</option>`).join('');
     let html = S.flota.map((f, i) => `<div class="barco" data-i="${i}">
-        <span class="pastilla ${f.estilo === 'app' ? '' : 'otro'}" style="background:${f.color};border-color:${f.color}"></span>
+        <label class="pastilla ${f.estilo === 'app' ? '' : 'otro'}" style="background:${f.color};border-color:${f.color}" title="Color de ${esc(f.nombre)} (relleno: sigue la app; hueco: navega a su manera)"><input type="color" id="b-${i}-color" data-c="color" value="${f.color}" aria-label="Color de ${esc(f.nombre)}"></label>
         <input type="text" id="b-${i}-nombre" data-c="nombre" value="${esc(f.nombre)}" aria-label="Nombre del barco">
         <button class="quitar" type="button" data-quitar="${i}" aria-label="Quitar ${esc(f.nombre)}">×</button>
         <div class="det">
           <label>Modelo<select id="b-${i}-modelo" data-c="modelo">${MODELOS.map(m => `<option value="${m.k}" ${m.k === f.modelo ? 'selected' : ''}>${esc(m.n)}</option>`).join('')}</select></label>
           <label>Cómo navega<select id="b-${i}-estilo" data-c="estilo">${opcEstilos(f.estilo)}</select></label>
           <label>Tripul.<input type="number" id="b-${i}-trip" data-c="tripulantes" min="1" max="20" step="1" value="${f.tripulantes || ''}" placeholder="${tripRef(f.modelo)}"></label>
-        </div>${orcHtml(f.orc, 'b-' + i)}</div>`).join('');
+          <label>Clase${selClase(f.clase, `b-${i}-clase`)}</label>
+        </div>${orcHtml(f.orc, 'b-' + i)}${ircHtml(f.irc, 'b-' + i)}</div>`).join('');
     if (S.imp) html += `<div class="barco real" data-real="1"><span class="pastilla" style="background:var(--real)"></span><strong>Tu barco (track grabado)</strong><span></span>
-        <div class="det" style="grid-template-columns:1fr"><span class="nota">${esc(nombreModelo(modeloImp()))}. No se simula: es el track real. El modelo se cambia en «Importar».</span></div>${orcHtml(S.impOpc.orc, 'real')}</div>`;
+        <div class="det" style="grid-template-columns:minmax(0,1fr) 64px"><span class="nota">${esc(nombreModelo(modeloImp()))}. No se simula: es el track real. El modelo se cambia en «Importar». Su fantasma va en su misma clase.</span><label>Clase${selClase(S.impOpc.clase, 'real-clase')}</label></div>${orcHtml(S.impOpc.orc, 'real')}${ircHtml(S.impOpc.irc, 'real')}</div>`;
     if (!S.flota.length && !S.imp) html = '<p class="vacio">No hay barcos. Añade uno, pon la flota de prueba o carga una flota guardada.</p>';
     $('#barcos').innerHTML = html;
   }
   $('#barcos').addEventListener('change', e => {
-    if (e.target.dataset.orc) {
-      const v = COMP.leerNumero(e.target.value), fila = e.target.closest('[data-i]');
+    const sis = e.target.dataset.orc ? 'orc' : e.target.dataset.irc ? 'irc' : null;
+    if (sis) {
+      const k = e.target.dataset[sis], v = COMP.leerNumero(e.target.value), fila = e.target.closest('[data-i]');
       let dest;
-      if (e.target.closest('[data-real]')) dest = S.impOpc.orc;
-      else { const f = S.flota[+fila.dataset.i]; f.orc = f.orc || {}; dest = f.orc; }
-      if (v == null) delete dest[e.target.dataset.orc]; else dest[e.target.dataset.orc] = v;
+      if (e.target.closest('[data-real]')) { S.impOpc[sis] = S.impOpc[sis] || {}; dest = S.impOpc[sis]; }
+      else { const f = S.flota[+fila.dataset.i]; f[sis] = f[sis] || {}; dest = f[sis]; }
+      if (v == null) delete dest[k]; else dest[k] = v;
       e.target.value = v == null ? '' : v; guardarFlotaActual();
-      if (S.sim && !S.simulando) { for (const b of S.barcos) { if (b.real) b.orc = S.impOpc.orc; } const ff = S.flotaSim; S.barcos.forEach((b, i) => { if (!b.real && !b.fantasma) { const src = S.flota.find(f => f.nombre === b.nombre); if (src) b.orc = src.orc; } }); resultados(); }
+      const sum = e.target.closest('details').querySelector('summary');
+      sum.textContent = (sis === 'orc' ? 'Datos ORC' : 'Datos IRC') + (Object.values(dest).some(x => x != null) ? ' ✓' : '');
+      aplicarAVista();
       return;
     }
+    if (e.target.id === 'real-clase') { S.impOpc.clase = e.target.value; aplicarAVista(); return; }
     const fila = e.target.closest('[data-i]'), c = e.target.dataset.c; if (!fila || !c) return;
     const f = S.flota[+fila.dataset.i];
+    if (c === 'color' || c === 'clase') { f[c] = e.target.value; pintarFlota(); guardarFlotaActual(); aplicarAVista(); return; }
     if (c === 'tripulantes') f.tripulantes = e.target.value ? Math.max(1, Math.round(+e.target.value)) : null;
     else f[c] = e.target.value;
     if (c === 'nombre' && !f.nombre.trim()) f.nombre = 'Barco ' + (+fila.dataset.i + 1);
     if (c !== 'nombre') pintarFlota();
     guardarFlotaActual(); marcarSucio();
+  });
+  $('#barcos').addEventListener('input', e => {
+    if (e.target.dataset.c !== 'color') return;
+    const p = e.target.parentElement; p.style.background = e.target.value; p.style.borderColor = e.target.value;
   });
   $('#barcos').addEventListener('click', e => {
     const b = e.target.closest('[data-quitar]'); if (!b) return;
@@ -4326,7 +4474,7 @@ window.OM_DATOS = {"REGATAS":[{"id":"r1","titulo":"Día de manual","resumen":"12
     S.flota.push({ nombre: `${nombreModelo(m)} · ${S.flota.length + 1}`, modelo: m, estilo: 'profesional', color, tripulantes: null });
     pintarFlota(); guardarFlotaActual(); marcarSucio();
   });
-  $('#flota-prueba').addEventListener('click', () => { S.flota = D.FLOTA.map(f => ({ ...f, tripulantes: null })); pintarFlota(); guardarFlotaActual(); marcarSucio(); });
+  $('#flota-prueba').addEventListener('click', () => { S.flota = flotaPrueba(); pintarFlota(); guardarFlotaActual(); marcarSucio(); });
   $('#flota-vaciar').addEventListener('click', () => { S.flota = []; pintarFlota(); guardarFlotaActual(); marcarSucio(); });
   function pintarFlotasGuardadas() {
     const it = todos('flotas'), ids = Object.keys(it).sort((a, b) => String(it[a].nombre).localeCompare(String(it[b].nombre), 'es'));
@@ -4449,7 +4597,7 @@ window.OM_DATOS = {"REGATAS":[{"id":"r1","titulo":"Día de manual","resumen":"12
         else if (/^\s*\{/.test(txt)) fuente.cuaderno = IMP.leerCuaderno(txt);
         else throw new Error(`«${f.name}» no es ni un GPX ni un cuaderno de regata`);
       }
-      S.impFuente = fuente; S.impOpc = { offset: 0, cruceOffset: 0, vueltas: 0, eje: null, modelo: null, fantasma: true, orc: S.impOpc.orc || {} };
+      S.impFuente = fuente; S.impOpc = { offset: 0, cruceOffset: 0, vueltas: 0, eje: null, modelo: null, fantasma: true, orc: S.impOpc.orc || {}, irc: S.impOpc.irc || {}, clase: S.impOpc.clase || '' };
       prepararImportada(true);
       if (S.imp) simular();
     } catch (e) { errorImp('No se ha podido importar: ' + e.message); }
@@ -4541,7 +4689,7 @@ window.OM_DATOS = {"REGATAS":[{"id":"r1","titulo":"Día de manual","resumen":"12
   // ═══ SIMULAR ═══════════════════════════════════════════════════════════════
   function montar() {
     const c = aSimulador(S.cond);
-    const flota = S.flota.map(f => ({ nombre: f.nombre, modelo: f.modelo, estilo: f.estilo, color: f.color, orc: f.orc,
+    const flota = S.flota.map(f => ({ nombre: f.nombre, modelo: f.modelo, estilo: f.estilo, color: f.color, orc: f.orc, irc: f.irc, clase: f.clase || '',
       ...(f.estilo === 'app' ? {} : { E: { ...limpiarEstilo(estilo(f.estilo)) } }), ...(f.tripulantes ? { tripulantes: f.tripulantes } : {}) }));
     let duracion = D.DURACION;
     if (S.imp) {
@@ -4549,7 +4697,7 @@ window.OM_DATOS = {"REGATAS":[{"id":"r1","titulo":"Día de manual","resumen":"12
       duracion = Math.max(duracion, Math.round(S.imp.duracion * 2.5));
       if (S.impOpc.fantasma) {
         const m = modeloImp(), trip = S.imp.parametros && S.imp.parametros.tripulacion, cr = cruceCorregido();
-        flota.unshift({ nombre: `Fantasma · ${nombreModelo(m)}`, modelo: m, estilo: 'app', color: css('--tinta') || '#0d1b26', fantasma: true, orc: S.impOpc.orc,
+        flota.unshift({ nombre: `Fantasma · ${nombreModelo(m)}`, modelo: m, estilo: 'app', color: css('--tinta') || '#0d1b26', fantasma: true, orc: S.impOpc.orc, irc: S.impOpc.irc,
           ...(trip ? { tripulantes: +trip } : {}), ...(cr ? { inicio: { t: cr.t, x: cr.x, y: cr.y, s: cr.s, v: cr.v, rumbo: cr.rumbo } } : {}) });
       }
     } else c.vueltas = +S.cond.vueltas || 2;
@@ -4595,11 +4743,12 @@ window.OM_DATOS = {"REGATAS":[{"id":"r1","titulo":"Día de manual","resumen":"12
     const barcos = s.barcos.map((b, i) => ({ id: b.id, nombre: b.nombre, color: b.color, usaApp: b.usaApp, estilo: b.usaApp ? 'Sigue la app' : (b.E ? b.E.nombre : b.estilo),
       estiloDesc: b.usaApp ? 'Sale donde dice el asistente de salida, navega a los ángulos y por la amura que da la app, vira y traslucha cuando lo dice (layline o role) y actualiza el viento en cada boya.' : (b.E ? (b.E.desc || descripcion(b.E)) : ''),
       modelo: b.modeloNombre, track: b.track, eventos: b.eventos, tiempos: b.tiempos, fin: b.fin, dist: b.dist, maniobras: b.maniobras, consejos: b.consejos,
-      salida: b.puntoSalida, trip: b.tripulantes, inicio: b.inicio, fantasma: !!(S.flotaSim[i] && S.flotaSim[i].fantasma), orc: S.flotaSim[i] && S.flotaSim[i].orc }));
+      salida: b.puntoSalida, trip: b.tripulantes, inicio: b.inicio, fantasma: !!(S.flotaSim[i] && S.flotaSim[i].fantasma), orc: S.flotaSim[i] && S.flotaSim[i].orc, irc: S.flotaSim[i] && S.flotaSim[i].irc,
+      clase: S.flotaSim[i] && S.flotaSim[i].fantasma ? (S.impOpc.clase || '') : (S.flotaSim[i] && S.flotaSim[i].clase) || '' }));
     if (S.imp) {
       const I = S.imp, cr = cruceCorregido();
       barcos.push({ id: 'real', real: true, nombre: 'Tu barco (track)', color: css('--real'), usaApp: false, estilo: 'Track grabado', modelo: nombreModelo(modeloImp()),
-        track: I.track, eventos: [], tiempos: I.pasos.tiempos, fin: I.pasos.fin, dist: distTrack(I.track, I.pasos.fin), maniobras: null, consejos: [], cruce: cr, orc: S.impOpc.orc });
+        track: I.track, eventos: [], tiempos: I.pasos.tiempos, fin: I.pasos.fin, dist: distTrack(I.track, I.pasos.fin), maniobras: null, consejos: [], cruce: cr, orc: S.impOpc.orc, irc: S.impOpc.irc, clase: S.impOpc.clase || '' });
     }
     S.barcos = barcos; S.recorrido = s.recorrido; S.campo = s.campo;
     if (final) {
@@ -4807,35 +4956,45 @@ window.OM_DATOS = {"REGATAS":[{"id":"r1","titulo":"Día de manual","resumen":"12
   function resultados() {
     if (!S.sim) return;
     const distNm = recorridoLargo(S.recorrido) / 1852, vm = vientoMedio();
-    const metodos = [['real', 'Tiempo real'], ['tot', 'ToT'], ['tod', 'ToD'], ['tn', 'Triple número']];
+    const metodos = [['real', 'Tiempo real'], ['tot', 'ORC ToT'], ['tod', 'ORC ToD'], ['tn', 'ORC triple número'], ['irc', 'IRC']];
     const banda = COMP.bandaTN(vm, { banda: 'auto' });
+    const clases = CLASES.filter(k => S.barcos.some(b => b.clase === k)), hayClases = clases.length > 0;
+    if (S.clase && !clases.includes(S.clase)) S.clase = '';
     $('#metodo').innerHTML = `<div class="chips" role="group" aria-label="Clasificación por">${metodos.map(([k, n]) => `<button class="chip" type="button" data-metodo="${k}" aria-pressed="${S.metodo === k}">${n}</button>`).join('')}</div>
       ${S.metodo === 'tn' ? `<label class="nota" for="banda">Banda</label><select id="banda"><option value="auto" ${S.banda === 'auto' ? 'selected' : ''}>Por el viento (${banda})</option><option value="bajo" ${S.banda === 'bajo' ? 'selected' : ''}>Baja</option><option value="medio" ${S.banda === 'medio' ? 'selected' : ''}>Media</option><option value="alto" ${S.banda === 'alto' ? 'selected' : ''}>Alta</option></select>` : ''}
+      ${hayClases ? `<div class="chips" role="group" aria-label="Clasificación">${[['', 'General'], ...clases.map(k => [k, 'Clase ' + k])].map(([k, n]) => `<button class="chip" type="button" data-clase="${k}" aria-pressed="${S.clase === k}">${n}${k ? ` <span class="num">${S.barcos.filter(b => b.clase === k).length}</span>` : ''}</button>`).join('')}</div>` : ''}
       <span class="nota">Recorrido teórico: <span class="num">${distNm.toFixed(2)} nm</span> · viento medio <span class="num">${vm.toFixed(1)} kn</span></span>`;
-    const comp = COMP.compensar(S.barcos.map(b => ({ id: b.id, fin: b.fin, orc: b.orc })), { metodo: S.metodo, distanciaNm: distNm, vientoMedio: vm, banda: S.banda });
+    // Por clases: cada clase se clasifica aparte (con el método elegido), como en el RTC
+    const enTabla = S.clase ? S.barcos.filter(b => b.clase === S.clase) : S.barcos;
+    const comp = COMP.compensar(enTabla.map(b => ({ id: b.id, fin: b.fin, orc: b.orc, irc: b.irc })), { metodo: S.metodo, distanciaNm: distNm, vientoMedio: vm, banda: S.banda });
+    if (comp.suma) $('#metodo').insertAdjacentHTML('beforeend', `<span class="nota">Algún compensado salía negativo: se ha sumado <span class="num">${mmss(comp.suma)}</span> a todos (RTC 204.2 B); el orden no cambia.</span>`);
     const porId = new Map(comp.filas.map((f, i) => [f.id, { ...f, pos: i + 1 }]));
     const orden = comp.filas.map(f => S.barcos.find(b => b.id === f.id));
     const lider = comp.filas.find(f => f.compensado != null);
     const faltan = comp.filas.filter(f => f.falta && f.falta !== 'llegada');
-    const NOMBRE_DATO = { tot: 'ToT', tod: 'ToD', tnBajo: 'TN bajo', tnMedio: 'TN medio', tnAlto: 'TN alto', distancia: 'distancia' };
+    const NOMBRE_DATO = { tot: 'ToT', tod: 'ToD', tnBajo: 'TN bajo', tnMedio: 'TN medio', tnAlto: 'TN alto', distancia: 'distancia', tcc: 'TCC' };
+    const sisFalta = S.metodo === 'irc' ? 'IRC' : 'ORC';
     $('#faltan').hidden = !faltan.length;
-    $('#faltan').textContent = faltan.length ? `Faltan datos ORC para compensar: ${faltan.map(f => `${S.barcos.find(b => b.id === f.id).nombre} (${NOMBRE_DATO[f.falta] || f.falta})`).join(', ')}. Se ponen en «Flota» → «Datos ORC» de cada barco.` : '';
+    $('#faltan').textContent = faltan.length ? `Faltan datos ${sisFalta} para compensar: ${faltan.map(f => `${S.barcos.find(b => b.id === f.id).nombre} (${NOMBRE_DATO[f.falta] || f.falta})`).join(', ')}. Se ponen en «Flota» → «Datos ${sisFalta}» de cada barco.` : '';
     const R = S.recorrido, comp_ = S.metodo !== 'real';
     const tramos = b => R.map((l, i) => { const x = b.tiempos[i], p = i ? b.tiempos[i - 1] : { t: 0 }; return x && p ? mmss(x.t - p.t) : '—'; });
     const sitio = b => b.real ? (b.cruce ? `+${mmss(b.cruce.t)}` : '—') : b.inicio ? `+${mmss(b.inicio.t)}` : b.salida == null ? '—' : b.salida <= 0.25 ? 'pin' : b.salida >= 0.75 ? 'comité' : 'centro';
-    $('#resultados').innerHTML = `<thead><tr><th>#</th><th>Barco</th><th>Decide</th><th>Salida</th>${R.map(l => `<th class="num">${esc(l.nombre)}</th>`).join('')}<th class="num">Tiempo</th>${comp_ ? '<th class="num">Compensado</th>' : ''}<th class="num">Al primero</th><th class="num">Maniobras</th><th class="num">Distancia</th></tr></thead><tbody>` +
+    $('#resultados').innerHTML = `<thead><tr><th>#</th><th>Barco</th>${hayClases ? '<th>Clase</th>' : ''}<th>Decide</th><th>Salida</th>${R.map(l => `<th class="num">${esc(l.nombre)}</th>`).join('')}<th class="num">Tiempo</th>${comp_ ? '<th class="num">Compensado</th>' : ''}<th class="num">Al primero</th><th class="num">Maniobras</th><th class="num">Distancia</th></tr></thead><tbody>` +
       orden.map(b => { const f = porId.get(b.id), d = f.compensado != null && lider ? f.compensado - lider.compensado : null;
-        return `<tr class="${b.real ? 'es-real' : ''}"><td class="num">${f.compensado != null ? f.pos : '—'}</td><td><span style="color:${b.real ? 'var(--real)' : b.color}">■</span> ${esc(b.nombre)}</td><td>${esc(b.estilo)}</td><td>${sitio(b)}</td>${tramos(b).map(x => `<td class="num">${x}</td>`).join('')}<td class="num">${comp_ ? mmss(b.fin) : `<strong>${mmss(b.fin)}</strong>`}</td>${comp_ ? `<td class="num"><strong>${f.compensado != null ? mmss(f.compensado) : '—'}</strong></td>` : ''}<td class="num delta ${d > 0.5 ? 'mas' : ''}">${d == null ? '—' : d > 0.5 ? '+' + mmss(d) : '—'}</td><td class="num">${b.maniobras == null ? '—' : b.maniobras}</td><td class="num">${(b.dist / 1852).toFixed(2)} nm</td></tr>`; }).join('') + '</tbody>';
+        return `<tr class="${b.real ? 'es-real' : ''}"><td class="num">${f.compensado != null ? f.pos : '—'}</td><td><span style="color:${b.real ? 'var(--real)' : b.color}">${b.usaApp || b.real ? '■' : '□'}</span> ${esc(b.nombre)}</td>${hayClases ? `<td>${b.clase || '—'}</td>` : ''}<td>${esc(b.estilo)}</td><td>${sitio(b)}</td>${tramos(b).map(x => `<td class="num">${x}</td>`).join('')}<td class="num">${comp_ ? mmss(b.fin) : `<strong>${mmss(b.fin)}</strong>`}</td>${comp_ ? `<td class="num"><strong>${f.compensado != null ? mmss(f.compensado) : '—'}</strong></td>` : ''}<td class="num delta ${d > 0.5 ? 'mas' : ''}">${d == null ? '—' : d > 0.5 ? '+' + mmss(d) : '—'}</td><td class="num">${b.maniobras == null ? '—' : b.maniobras}</td><td class="num">${(b.dist / 1852).toFixed(2)} nm</td></tr>`; }).join('') + '</tbody>';
   }
-  $('#metodo').addEventListener('click', e => { const b = e.target.closest('[data-metodo]'); if (!b) return; S.metodo = b.dataset.metodo; resultados(); });
+  $('#metodo').addEventListener('click', e => {
+    const c = e.target.closest('[data-clase]'); if (c) { S.clase = c.dataset.clase; resultados(); return; }
+    const b = e.target.closest('[data-metodo]'); if (!b) return; S.metodo = b.dataset.metodo; resultados(); });
   $('#metodo').addEventListener('change', e => { if (e.target.id === 'banda') { S.banda = e.target.value; resultados(); } });
 
   // ═══ QUÉ HIZO CADA BARCO Y POR QUÉ ═════════════════════════════════════════
   function decisiones() {
     if (!S.barcos.length) return;
     if (S.decId == null || !S.barcos.some(b => b.id === S.decId)) S.decId = (S.barcos.find(b => b.fantasma) || S.barcos.find(b => b.usaApp) || S.barcos[0]).id;
-    $('#dec-barcos').innerHTML = S.barcos.map(b => `<button class="chip" type="button" data-dec="${b.id}" aria-pressed="${b.id === S.decId}"><span style="color:${b.real ? 'var(--real)' : b.color}">■</span> ${esc(b.nombre)}</button>`).join('');
+    $('#dec-barcos').innerHTML = S.barcos.map(b => `<button class="chip" type="button" data-dec="${b.id}" aria-pressed="${b.id === S.decId}"><span style="color:${b.real ? 'var(--real)' : b.color}">${b.usaApp || b.real ? '■' : '□'}</span> ${esc(b.nombre)}</button>`).join('');
     const b = S.barcos.find(x => x.id === S.decId);
+    $('#res-decisiones').textContent = `${S.barcos.length} barcos · viendo ${b.nombre}${b.real ? '' : ` (${b.eventos.length} maniobra${b.eventos.length !== 1 ? 's' : ''})`}`;
     const ev = [];
     if (b.real) {
       if (b.cruce) ev.push({ t: b.cruce.t, ic: '⟶', que: `Cruza la línea de salida amurado a ${b.cruce.s > 0 ? 'babor' : 'estribor'}`, por: '' });
